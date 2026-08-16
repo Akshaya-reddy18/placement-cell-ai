@@ -22,39 +22,49 @@ def career_strategy_agent(state: AgentState) -> AgentState:
     Skill Gaps: {json.dumps(state.get("skill_gaps", {}).get("critical_missing", []))}
     Interview Readiness: {state.get("interview_prep", {}).get("readiness_score", 0)}%
     Matched Jobs: {[f"{j['title']} at {j['company']}" for j in state["matched_jobs"][:5]]}
+    Student Constraints: {json.dumps(state["student_data"].get("career_goals", {}))}
     
-    Return ONLY valid JSON (no markdown):
+    Return ONLY valid JSON (no markdown) with this exact schema:
     {{
-      "target_companies": ["list of 10 ideal companies"],
-      "focus_recommendation": {{"primary_focus": "string", "why": "string"}},
-      "skill_roi": ["skills with highest job return"],
-      "placement_probability": 0-100,
-      "action_plan_90_days": ["milestones for 30, 60, 90 days"],
-      "red_flags": ["concerning areas"],
-      "quick_wins": ["fast improvements"],
-      "honest_assessment": "one paragraph direct advice",
-      "predicted_package_range": {{"min": "LPA", "max": "LPA"}}
+      "focusRecommendation": "string",
+      "placementProbability": 0-100,
+      "targetCompanies": ["company1", "company2"],
+      "milestones": [
+        {{"id": "string", "title": "string", "description": "string", "quarter": "string", "status": "upcoming"}}
+      ],
+      "skillGaps": [
+        {{"skill": "string", "priority": "critical" | "nice_to_have", "marketDemand": 0-100}}
+      ],
+      "learningRecommendations": ["course or topic 1"],
+      "marketInsights": [
+        {{"skill": "string", "demand": 0-100, "growth": 0-100}}
+      ],
+      "packageProjection": {{"min": 0, "max": 0}}
     }}"""
 
     default_strategy = {
-        "target_companies": [job["company"] for job in state["matched_jobs"][:10]],
-        "focus_recommendation": {"primary_focus": "Strengthen the highest-paying target role fit", "why": "It matches current skills and job demand."},
-        "skill_roi": sorted(state.get("skill_graph", {}).keys())[:8],
-        "placement_probability": min(100, max(0, state.get("interview_prep", {}).get("readiness_score", 0))),
-        "action_plan_90_days": ["Days 1-30: close key skill gaps", "Days 31-60: optimize resume and apply", "Days 61-90: intensify interview practice"],
-        "red_flags": ["Sparse project evidence" if len(state.get("skill_graph", {})) < 5 else ""],
-        "quick_wins": ["Update resume keywords", "Practice 5 interview questions", "Apply to 10 target jobs"],
-        "honest_assessment": "You can become interview-ready, but you need disciplined execution over the next 90 days.",
-        "predicted_package_range": {"min": "4", "max": "10"},
+      "focusRecommendation": "Strengthen backend skills and prepare for technical interviews",
+      "placementProbability": min(100, max(10, state.get("interview_prep", {}).get("readiness_score", 0))),
+      "targetCompanies": [job["company"] for job in state["matched_jobs"][:5]],
+      "milestones": [
+        {"id": "m1", "title": "Close Skill Gaps", "description": "Complete advanced React tutorial", "quarter": "Q1", "status": "in_progress"},
+        {"id": "m2", "title": "Resume Polish", "description": "Update resume with new projects", "quarter": "Q1", "status": "upcoming"}
+      ],
+      "skillGaps": [{"skill": "System Design", "priority": "critical", "marketDemand": 90}],
+      "learningRecommendations": ["Read Designing Data-Intensive Applications", "Leetcode Mediums"],
+      "marketInsights": [{"skill": "React", "demand": 95, "growth": 20}],
+      "packageProjection": {"min": 5, "max": 12}
     }
 
     strategy = call_gemini_json(prompt, default_strategy, temperature=0)
-    strategy.setdefault("target_companies", default_strategy["target_companies"])
-    strategy.setdefault("focus_recommendation", default_strategy["focus_recommendation"])
-    strategy.setdefault("skill_roi", default_strategy["skill_roi"])
-    strategy.setdefault("placement_probability", default_strategy["placement_probability"])
-    strategy.setdefault("action_plan_90_days", default_strategy["action_plan_90_days"])
-    strategy.setdefault("quick_wins", default_strategy["quick_wins"])
+    strategy.setdefault("focusRecommendation", default_strategy["focusRecommendation"])
+    strategy.setdefault("placementProbability", default_strategy["placementProbability"])
+    strategy.setdefault("targetCompanies", default_strategy["targetCompanies"])
+    strategy.setdefault("milestones", default_strategy["milestones"])
+    strategy.setdefault("skillGaps", default_strategy["skillGaps"])
+    strategy.setdefault("learningRecommendations", default_strategy["learningRecommendations"])
+    strategy.setdefault("marketInsights", default_strategy["marketInsights"])
+    strategy.setdefault("packageProjection", default_strategy["packageProjection"])
     save_career_strategy(student_id, strategy)
 
     state["career_strategy"] = strategy

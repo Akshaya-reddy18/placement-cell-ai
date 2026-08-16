@@ -44,6 +44,9 @@ CREATE TABLE jobs (
   location text,
   experience_level text,
   posted_at timestamptz,
+  work_mode text,
+  employment_type text,
+  company_type text,
   scraped_at timestamptz DEFAULT now(),
   is_active boolean DEFAULT true
 );
@@ -137,11 +140,12 @@ CREATE TABLE career_strategies (
   student_id uuid REFERENCES students(id) ON DELETE CASCADE,
   target_companies jsonb,
   focus_recommendation text,
-  skill_roi jsonb,
   placement_probability numeric(5,2),
-  action_plan_90_days jsonb,
-  red_flags jsonb,
-  quick_wins jsonb,
+  milestones jsonb,
+  skill_gaps jsonb,
+  learning_recommendations jsonb,
+  market_insights jsonb,
+  package_projection jsonb,
   created_at timestamptz DEFAULT now()
 );
 
@@ -165,6 +169,7 @@ CREATE TABLE analysis_status (
   completed_agents jsonb DEFAULT '[]',
   percentage int DEFAULT 0,
   status text DEFAULT 'pending',
+  error_message text,
   started_at timestamptz DEFAULT now(),
   completed_at timestamptz
 );

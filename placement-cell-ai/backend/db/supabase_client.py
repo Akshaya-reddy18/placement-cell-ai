@@ -165,32 +165,32 @@ class _FallbackQuery:
         self._local_query = local_query
 
     def select(self, columns: str = "*", count: str | None = None):
-        self._remote_query.select(columns, count=count)
+        self._remote_query = self._remote_query.select(columns, count=count)
         self._local_query.select(columns, count=count)
         return self
 
     def insert(self, record: dict):
-        self._remote_query.insert(record)
+        self._remote_query = self._remote_query.insert(record)
         self._local_query.insert(record)
         return self
 
     def upsert(self, record: dict, on_conflict: str | None = None):
-        self._remote_query.upsert(record, on_conflict=on_conflict)
+        self._remote_query = self._remote_query.upsert(record, on_conflict=on_conflict)
         self._local_query.upsert(record, on_conflict=on_conflict)
         return self
 
     def eq(self, field: str, value: object):
-        self._remote_query.eq(field, value)
+        self._remote_query = self._remote_query.eq(field, value)
         self._local_query.eq(field, value)
         return self
 
     def order(self, field: str, desc: bool = False):
-        self._remote_query.order(field, desc=desc)
+        self._remote_query = self._remote_query.order(field, desc=desc)
         self._local_query.order(field, desc=desc)
         return self
 
     def limit(self, count: int):
-        self._remote_query.limit(count)
+        self._remote_query = self._remote_query.limit(count)
         self._local_query.limit(count)
         return self
 
@@ -368,26 +368,18 @@ def save_referral(student_id: str, referral_data: dict) -> None:
 def save_career_strategy(student_id: str, strategy_data: dict) -> None:
     """Save career strategy to Supabase."""
     client = get_supabase_client()
-    focus = strategy_data.get("focus_recommendation")
-    if isinstance(focus, dict):
-        focus = focus.get("primary_focus") or str(focus)
-    action_plan = strategy_data.get("action_plan_90_days")
-    if not isinstance(action_plan, dict):
-        action_plan = {"items": action_plan or []}
-
+    focus = strategy_data.get("focusRecommendation")
+    
     client.table("career_strategies").upsert({
         "student_id": student_id,
-        "target_companies": strategy_data.get("target_companies"),
+        "target_companies": strategy_data.get("targetCompanies"),
         "focus_recommendation": focus,
-        "skill_roi": strategy_data.get("skill_roi"),
-        "placement_probability": strategy_data.get("placement_probability"),
-        "action_plan_90_days": {
-            **action_plan,
-            "honest_assessment": strategy_data.get("honest_assessment"),
-            "predicted_package_range": strategy_data.get("predicted_package_range"),
-        },
-        "red_flags": strategy_data.get("red_flags"),
-        "quick_wins": strategy_data.get("quick_wins"),
+        "placement_probability": strategy_data.get("placementProbability"),
+        "milestones": strategy_data.get("milestones"),
+        "skill_gaps": strategy_data.get("skillGaps"),
+        "learning_recommendations": strategy_data.get("learningRecommendations"),
+        "market_insights": strategy_data.get("marketInsights"),
+        "package_projection": strategy_data.get("packageProjection"),
     }, on_conflict="student_id").execute()
 
 
@@ -473,10 +465,20 @@ def mark_analysis_complete(student_id: str, completed_agents: list[str]) -> None
 def mark_analysis_failed(student_id: str, error: str) -> None:
     """Mark the analysis pipeline as failed."""
     client = get_supabase_client()
-    client.table("analysis_status").upsert({
-        "student_id": student_id,
-        "status": "failed",
-        "current_agent": "error",
-        "percentage": 0,
-        "error": error,
-    }).execute()
+    try:
+        client.table("analysis_status").upsert({
+            "student_id": student_id,
+            "status": "failed",
+            "current_agent": "error",
+            "percentage": 0,
+            "error_message": error,
+        }).execute()
+    except Exception as e:
+        # Fallback if error_message column is not yet created in the database
+        logger.warning(f"Could not update error_message column, falling back to current_agent. Error: {e}")
+        client.table("analysis_status").upsert({
+            "student_id": student_id,
+            "status": "failed",
+            "current_agent": f"ERROR: {error[:200]}",
+            "percentage": 0,
+        }).execute()

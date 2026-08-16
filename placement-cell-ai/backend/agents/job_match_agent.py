@@ -18,10 +18,12 @@ def job_match_agent(state: AgentState) -> AgentState:
     # 1. Scrape jobs based on career goals and skills
     career_goals = state["student_data"].get("career_goals", {})
     preferred_roles = career_goals.get("preferred_roles", ["Software Engineer"])
+    locations = career_goals.get("locations", ["India"])
+    location_str = locations[0] if locations else "India"
     
     all_jobs = []
     for role in preferred_roles[:2]: # Limit to top 2 roles to avoid excessive scraping
-        query = f"{role} jobs in India"
+        query = f"{role} jobs in {location_str}"
         jobs = scrape_jobs_serpapi.invoke(query)
         all_jobs.extend(jobs)
     

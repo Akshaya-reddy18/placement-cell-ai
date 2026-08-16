@@ -14,12 +14,36 @@ import { MetricCard } from '@/components/shared/MetricCard';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { ProgressRing } from '@/components/shared/ProgressRing';
 import { SectionCard } from '@/components/shared/SectionCard';
+import { useAppStore } from '@/store/useStore';
 import { useDashboard } from '@/hooks/useQueries';
+import { Bot, AlertTriangle } from 'lucide-react';
 
 export default function DashboardPage() {
   const { data, isLoading, isError } = useDashboard();
+  const aiStatus = useAppStore((s) => s.aiStatus);
 
   if (isLoading) return <LoadingState />;
+
+  if (aiStatus.status === 'pending' || aiStatus.status === 'running') {
+    return (
+      <EmptyState
+        icon={Bot}
+        title="AI Analysis in Progress"
+        description={`Your personalized dashboard is being generated. Current step: ${aiStatus.currentAgent} (${aiStatus.percentage}%)`}
+      />
+    );
+  }
+
+  if (aiStatus.status === 'failed') {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Analysis Failed"
+        description={`There was an error generating your dashboard: ${aiStatus.errorMessage || 'Unknown error'}`}
+      />
+    );
+  }
+
   if (isError || !data) {
     return (
       <EmptyState

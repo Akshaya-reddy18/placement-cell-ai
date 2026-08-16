@@ -103,11 +103,10 @@ async def run_placement_analysis(student_id: str, student_data: dict) -> dict:
     config = {"configurable": {"thread_id": student_id}}
     
     try:
-        # Note: In a real implementation, you'd need to import mark_analysis_failed 
-        # or handle DB updates here.
         final_state = await placement_graph.ainvoke(initial_state, config)
         return {"success": True, "state": final_state}
     except Exception as e:
         logger.exception(f"Pipeline execution failed: {str(e)}")
-        # mark_analysis_failed(student_id, str(e))
+        from backend.db.supabase_client import mark_analysis_failed
+        mark_analysis_failed(student_id, str(e))
         return {"success": False, "error": str(e)}

@@ -8,7 +8,6 @@ import JobsPage from '@/pages/Jobs';
 import OnboardingPage from '@/pages/Onboarding';
 import ResumePage from '@/pages/Resume';
 import SettingsPage from '@/pages/Settings';
-import TrackerPage from '@/pages/Tracker';
 
 export function AppRouter() {
   return (
@@ -25,7 +24,6 @@ export function AppRouter() {
             <Route path="resume" element={<ResumePage />} />
             <Route path="interview" element={<InterviewPage />} />
             <Route path="career" element={<CareerPage />} />
-            <Route path="tracker" element={<TrackerPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Route>

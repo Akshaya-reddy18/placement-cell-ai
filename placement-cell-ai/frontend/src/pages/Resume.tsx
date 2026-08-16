@@ -34,12 +34,30 @@ export default function ResumePage() {
 
 
   if (isLoading) return <LoadingState />;
-  if (isError || !data) {
+  if (isError || !data || (!data.originalExcerpt && data.scores.overall === 0)) {
     return (
       <EmptyState
         icon={FileText}
         title="No resume analysis"
         description="Upload your resume to get ATS scoring and optimization suggestions."
+        action={
+          <div className="flex flex-col items-center">
+              {isUploading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-500 mb-2" />
+              ) : (
+                <Button onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                  Upload Resume PDF
+                </Button>
+              )}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept=".pdf" 
+                onChange={handleFileUpload} 
+              />
+          </div>
+        }
       />
     );
   }

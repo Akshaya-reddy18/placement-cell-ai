@@ -16,7 +16,6 @@ const navItems = [
   { to: '/resume', label: 'Resume Optimizer', icon: FileText },
   { to: '/interview', label: 'Interview Prep', icon: MessageSquare },
   { to: '/career', label: 'Career Strategy', icon: Target },
-  { to: '/tracker', label: 'Application Tracker', icon: Kanban },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 

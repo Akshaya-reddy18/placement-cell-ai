@@ -1,4 +1,9 @@
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError as e:
+    fitz = None
+    import logging
+    logging.getLogger("resume_parser").warning(f"Failed to import fitz: {e}")
 import os
 import json
 import logging
@@ -85,6 +90,8 @@ def extract_resume_data(resume_text: str) -> dict:
 def parse_resume_pdf(pdf_path: str) -> dict:
     """Parse a PDF resume file and extract structured information."""
     try:
+        if fitz is None:
+            return {"error": "PyMuPDF (fitz) is not available on this system due to an import error."}
         doc = fitz.open(pdf_path)
         text = ""
         for page in doc:

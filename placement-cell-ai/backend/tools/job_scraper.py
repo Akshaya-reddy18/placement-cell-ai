@@ -1,8 +1,10 @@
 import os
 import httpx
+import logging
 from typing import Any
 from langchain_core.tools import tool
 
+logger = logging.getLogger(__name__)
 
 def extract_skills_from_description(description: str) -> list[str]:
     common_skills = [
@@ -18,6 +20,35 @@ def extract_skills_from_description(description: str) -> list[str]:
             skills.append(skill)
     return skills
 
+def extract_metadata_from_description(description: str) -> dict:
+    desc_lower = description.lower()
+    work_mode = "On-site"
+    if "remote" in desc_lower or "work from home" in desc_lower or "wfh" in desc_lower:
+        work_mode = "Remote"
+    elif "hybrid" in desc_lower:
+        work_mode = "Hybrid"
+
+    employment_type = "Full-time"
+    if "intern" in desc_lower or "internship" in desc_lower:
+        employment_type = "Internship"
+    elif "contract" in desc_lower:
+        employment_type = "Contract"
+    elif "freelance" in desc_lower:
+        employment_type = "Freelance"
+        
+    company_type = "MNC"
+    if "startup" in desc_lower or "early stage" in desc_lower:
+        company_type = "Startup"
+    elif "service based" in desc_lower or "consulting" in desc_lower:
+        company_type = "Service-based"
+    elif "product based" in desc_lower:
+        company_type = "Product-based"
+
+    return {
+        "work_mode": work_mode,
+        "employment_type": employment_type,
+        "company_type": company_type
+    }
 
 def infer_source(url: str) -> str:
     url_lower = url.lower()
@@ -30,125 +61,121 @@ def infer_source(url: str) -> str:
     elif "naukri" in url_lower:
         return "Naukri"
     else:
-        return "Other"
+        return "Company Website"
 
+def is_valid_apply_url(url: str) -> bool:
+    if not url: return False
+    url_lower = url.lower()
+    if "google.com/search" in url_lower: return False
+    if "bing.com/search" in url_lower: return False
+    if "google.com/url" in url_lower: return False
+    return True
 
 @tool
 def scrape_jobs_serpapi(query: str, location: str = "India", num_results: int = 20) -> list[dict]:
-    """Scrape job listings using SerpAPI Google Jobs search."""
-    serpapi_key = os.getenv("SERPAPI_KEY")
-    search_term = query.replace(" jobs in India", "").replace(" jobs", "").strip() or query
+    """Scrape real job listings using SerpAPI and Arbeitnow, aggregating results."""
+    search_term = query.replace(" jobs in India", "").replace(" jobs", "").strip().lower() or query.lower()
     
-    if not serpapi_key:
-        try:
-            remotive_res = httpx.get(
-                "https://remotive.com/api/remote-jobs",
-                params={"search": search_term},
-                timeout=30,
-            )
-            if remotive_res.status_code == 200:
-                jobs_data = remotive_res.json().get("jobs", [])
-                jobs = []
-                seen = set()
-                for job in jobs_data:
-                    title = job.get("title", "")
-                    company = job.get("company_name", "")
-                    key = f"{title}-{company}"
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    description = job.get("description", "")
-                    jobs.append({
-                        "title": title,
-                        "company": company,
-                        "location": job.get("candidate_required_location", "Remote"),
-                        "description": description,
-                        "url": job.get("url", ""),
-                        "source": "Remotive",
-                        "posted_at": job.get("publication_date", ""),
-                        "requirements": extract_skills_from_description(description),
-                        "experience_level": "Entry Level",
-                    })
-                if jobs:
-                    return jobs[:num_results]
-        except Exception as e:
-            logger.warning(f"Remotive fallback failed: {e}")
+    combined_jobs = []
+    seen = set()
 
-        return [
-            {
-                "title": "Python Backend Engineer Intern",
-                "company": "TechCorp",
-                "location": "Remote",
-                "description": "We're looking for a Python backend engineer intern to work on our REST API.",
-                "url": "https://example.com/job1",
-                "source": "Demo",
-                "posted_at": "3 days ago",
-                "requirements": ["Python", "FastAPI", "SQL"],
-                "experience_level": "Entry Level"
-            },
-            {
-                "title": "Full Stack Developer",
-                "company": "StartupXYZ",
-                "location": "Remote",
-                "description": "Build modern web applications using React and Node.js.",
-                "url": "https://example.com/job2",
-                "source": "Demo",
-                "posted_at": "1 week ago",
-                "requirements": ["JavaScript", "React", "Node.js"],
-                "experience_level": "Mid Level"
+    # Primary: SerpAPI (Google Jobs Engine)
+    serpapi_key = os.getenv("SERPAPI_KEY")
+    if serpapi_key:
+        try:
+            params = {
+                "engine": "google_jobs",
+                "q": query,
+                "location": location,
+                "api_key": serpapi_key,
+                "num": num_results,
+                "gl": "in",
+                "hl": "en"
             }
-        ]
-    
-    try:
-        params = {
-            "engine": "google_jobs",
-            "q": query,
-            "location": location,
-            "api_key": serpapi_key,
-            "num": num_results,
-            "gl": "in",
-            "hl": "en"
-        }
-        
-        response = httpx.get("https://serpapi.com/search", params=params, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        if "jobs_results" not in data:
-            return []
-        
-        jobs = []
-        seen = set()
-        
-        for job in data["jobs_results"]:
-            title = job.get("title", "")
-            company = job.get("company_name", "")
-            key = f"{title}-{company}"
-            
-            if key in seen:
-                continue
-            seen.add(key)
-            
-            apply_link = ""
-            if job.get("apply_options") and len(job["apply_options"]) > 0:
-                apply_link = job["apply_options"][0].get("link", "")
-            if not apply_link:
-                apply_link = job.get("related_links", [{}])[0].get("link", "")
+            # Reduced timeout and aggressively handle exceptions so it doesn't block
+            response = httpx.get("https://serpapi.com/search", params=params, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
                 
-            job_dict = {
-                "title": title,
-                "company": company,
-                "location": job.get("location", ""),
-                "description": job.get("description", ""),
-                "url": apply_link,
-                "source": infer_source(apply_link),
-                "posted_at": job.get("detected_extensions", {}).get("posted_at", ""),
-                "requirements": extract_skills_from_description(job.get("description", "")),
-                "experience_level": "Entry Level"
-            }
-            jobs.append(job_dict)
-        
-        return jobs
+                if "jobs_results" in data:
+                    for job in data["jobs_results"]:
+                        title = job.get("title", "")
+                        company = job.get("company_name", "")
+                        key = f"{title}-{company}"
+                        if key in seen: continue
+                        seen.add(key)
+                        
+                        apply_link = ""
+                        if job.get("apply_options"):
+                            apply_link = job["apply_options"][0].get("link", "")
+                        if not apply_link and job.get("related_links"):
+                            apply_link = job["related_links"][0].get("link", "")
+                        
+                        # Only include jobs with valid apply urls
+                        if not is_valid_apply_url(apply_link):
+                            continue
+
+                        metadata = extract_metadata_from_description(job.get("description", ""))
+                            
+                        combined_jobs.append({
+                            "title": title,
+                            "company": company,
+                            "location": job.get("location", ""),
+                            "description": job.get("description", ""),
+                            "url": apply_link,
+                            "job_url": apply_link,
+                            "apply_url": apply_link,
+                            "source": infer_source(apply_link),
+                            "posted_at": job.get("detected_extensions", {}).get("posted_at", ""),
+                            "requirements": extract_skills_from_description(job.get("description", "")),
+                            "experience_level": "Entry Level",
+                            "is_verified": True,
+                            **metadata
+                        })
+        except Exception as e:
+            logger.warning(f"SerpAPI fetch failed or timed out: {e}")
+
+    # Secondary: Arbeitnow (Always aggregate if possible)
+    try:
+        res = httpx.get("https://www.arbeitnow.com/api/job-board-api", timeout=10)
+        if res.status_code == 200:
+            jobs_data = res.json().get("data", [])
+            for job in jobs_data:
+                title = job.get("title", "")
+                company = job.get("company_name", "")
+                desc = job.get("description", "")
+                
+                # Check for basic keyword match if query exists
+                if search_term and search_term not in title.lower() and search_term not in desc.lower():
+                    continue
+                    
+                key = f"{title}-{company}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                
+                job_url = job.get("url", "")
+                if not is_valid_apply_url(job_url):
+                    continue
+
+                metadata = extract_metadata_from_description(desc)
+                
+                combined_jobs.append({
+                    "title": title,
+                    "company": company,
+                    "location": job.get("location", "Remote"),
+                    "description": desc,
+                    "url": job_url,
+                    "job_url": job_url,
+                    "apply_url": job_url,
+                    "source": "Arbeitnow",
+                    "posted_at": job.get("created_at", ""),
+                    "requirements": extract_skills_from_description(desc),
+                    "experience_level": "Entry Level",
+                    "is_verified": True,
+                    **metadata
+                })
     except Exception as e:
-        logger.error(f"SerpAPI error: {e}")
-        return []
+        logger.warning(f"Arbeitnow fetch failed: {e}")
+
+    return combined_jobs[:num_results]

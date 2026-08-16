@@ -52,25 +52,22 @@ interface CareerSlice {
   setCareer: (data: CareerData) => void;
 }
 
-interface TrackerSlice {
-  tracker: TrackerData | null;
-  setTracker: (data: TrackerData) => void;
-  moveApplication: (id: string, stage: ApplicationCard['stage']) => void;
-}
-
 export type AppStore = UserSlice &
   AISlice &
   DashboardSlice &
   JobsSlice &
   ResumeSlice &
   InterviewSlice &
-  CareerSlice &
-  TrackerSlice;
+  CareerSlice;
 
 const defaultFilters: JobFilters = {
   search: '',
+  roles: [],
   companies: [],
   locations: [],
+  workModes: [],
+  employmentTypes: [],
+  companyTypes: [],
   salaryMin: 0,
   skills: [],
 };
@@ -105,16 +102,6 @@ export const useAppStore = create<AppStore>()(
       career: null,
       setCareer: (career) => set({ career }),
 
-      tracker: null,
-      setTracker: (tracker) => set({ tracker }),
-      moveApplication: (id, stage) => {
-        const tracker = get().tracker;
-        if (!tracker) return;
-        const applications = tracker.applications.map((app) =>
-          app.id === id ? { ...app, stage } : app,
-        );
-        set({ tracker: { ...tracker, applications } });
-      },
     }),
     {
       name: 'placement-cell-store-v2',

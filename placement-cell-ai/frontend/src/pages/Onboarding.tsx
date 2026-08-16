@@ -15,7 +15,11 @@ const defaultGoals: CareerGoals = {
   preferredRoles: [],
   targetCompanies: [],
   workPreference: 'hybrid',
-  location: 'Bangalore',
+  locations: ['Bangalore'],
+  workModes: ['Hybrid', 'Remote'],
+  employmentTypes: ['Full-time'],
+  companyTypes: ['MNC', 'Startup'],
+  requiredConstraints: [],
   salaryExpectation: '12-18 LPA',
 };
 
@@ -73,6 +77,36 @@ export default function OnboardingPage() {
     setLoading(true);
     try {
       await submitOnboarding(form);
+      navigate('/dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      const guestForm: OnboardingPayload = {
+        name: 'Guest User',
+        email: `guest_${Date.now()}@college.edu`,
+        college: 'Guest Institute',
+        branch: 'Computer Science',
+        graduationYear: 2026,
+        skills: ['Python', 'React', 'TypeScript', 'Node.js'],
+        targetCompanies: ['Google', 'Microsoft', 'Amazon'],
+        careerGoals: {
+          preferredRoles: ['Software Engineer', 'Backend Developer'],
+          targetCompanies: ['Google', 'Microsoft', 'Amazon'],
+          workPreference: 'hybrid',
+          locations: ['Bangalore', 'Remote'],
+          workModes: ['Hybrid', 'Remote'],
+          employmentTypes: ['Full-time'],
+          companyTypes: ['MNC', 'Startup', 'FAANG'],
+          requiredConstraints: [],
+          salaryExpectation: '12-18 LPA',
+        },
+      };
+      await submitOnboarding(guestForm);
       navigate('/dashboard');
     } finally {
       setLoading(false);
@@ -203,10 +237,11 @@ export default function OnboardingPage() {
             )}
 
             {step === 4 && (
-              <>
+              <div className="space-y-6">
                 <Field label="Preferred roles (comma separated)">
                   <Input
                     placeholder="Backend Engineer, Full Stack"
+                    value={form.careerGoals.preferredRoles.join(', ')}
                     onChange={(e) =>
                       update({
                         careerGoals: {
@@ -217,36 +252,137 @@ export default function OnboardingPage() {
                     }
                   />
                 </Field>
-                <Field label="Work preference">
-                  <Input
-                    value={form.careerGoals.workPreference}
-                    onChange={(e) =>
-                      update({ careerGoals: { ...form.careerGoals, workPreference: e.target.value } })
-                    }
-                  />
-                </Field>
-                <Field label="Location">
-                  <Input
-                    value={form.careerGoals.location}
-                    onChange={(e) =>
-                      update({ careerGoals: { ...form.careerGoals, location: e.target.value } })
-                    }
-                  />
-                </Field>
-              </>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Locations (comma separated)</label>
+                    <Input
+                      placeholder="Bangalore, Pune, Remote"
+                      value={form.careerGoals.locations.join(', ')}
+                      onChange={(e) =>
+                        update({
+                          careerGoals: {
+                            ...form.careerGoals,
+                            locations: e.target.value.split(',').map((l) => l.trim()).filter(Boolean),
+                          }
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Work Modes</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['Remote', 'Hybrid', 'On-site'].map((mode) => {
+                        const isSelected = form.careerGoals.workModes.includes(mode);
+                        return (
+                          <Badge 
+                            key={mode} 
+                            variant={isSelected ? 'default' : 'outline'}
+                            className="cursor-pointer"
+                            onClick={() => {
+                              const newModes = isSelected 
+                                ? form.careerGoals.workModes.filter(m => m !== mode)
+                                : [...form.careerGoals.workModes, mode];
+                              update({ careerGoals: { ...form.careerGoals, workModes: newModes } });
+                            }}
+                          >
+                            {mode}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Employment Types</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['Full-time', 'Internship', 'Contract', 'Freelance'].map((type) => {
+                        const isSelected = form.careerGoals.employmentTypes.includes(type);
+                        return (
+                          <Badge 
+                            key={type} 
+                            variant={isSelected ? 'default' : 'outline'}
+                            className="cursor-pointer"
+                            onClick={() => {
+                              const newTypes = isSelected 
+                                ? form.careerGoals.employmentTypes.filter(t => t !== type)
+                                : [...form.careerGoals.employmentTypes, type];
+                              update({ careerGoals: { ...form.careerGoals, employmentTypes: newTypes } });
+                            }}
+                          >
+                            {type}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Company Types</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['Startup', 'MNC', 'Product-based', 'Service-based', 'Fintech', 'FAANG'].map((type) => {
+                        const isSelected = form.careerGoals.companyTypes.includes(type);
+                        return (
+                          <Badge 
+                            key={type} 
+                            variant={isSelected ? 'default' : 'outline'}
+                            className="cursor-pointer"
+                            onClick={() => {
+                              const newTypes = isSelected 
+                                ? form.careerGoals.companyTypes.filter(t => t !== type)
+                                : [...form.careerGoals.companyTypes, type];
+                              update({ careerGoals: { ...form.careerGoals, companyTypes: newTypes } });
+                            }}
+                          >
+                            {type}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-300">Required Constraints (e.g. Visa Sponsorship, No Relocation)</label>
+                    <Input
+                      placeholder="Sponsorship required..."
+                      value={form.careerGoals.requiredConstraints.join(', ')}
+                      onChange={(e) =>
+                        update({
+                          careerGoals: {
+                            ...form.careerGoals,
+                            requiredConstraints: e.target.value.split(',').map((c) => c.trim()).filter(Boolean),
+                          }
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
           <div className="mt-8 flex items-center justify-between border-t border-slate-800 pt-6">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={step === 0}
-              onClick={() => setStep((s) => s - 1)}
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Back
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={step === 0}
+                onClick={() => setStep((s) => s - 1)}
+              >
+                <ArrowLeft className="mr-1 h-4 w-4" />
+                Back
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-slate-700 text-slate-300"
+                onClick={handleGuestLogin}
+                disabled={loading}
+              >
+                Guest Login
+              </Button>
+            </div>
             {step < STEPS.length - 1 ? (
               <Button type="button" onClick={() => setStep((s) => s + 1)}>
                 Continue

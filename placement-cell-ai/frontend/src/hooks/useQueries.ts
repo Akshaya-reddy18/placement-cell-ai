@@ -4,7 +4,10 @@ import { useAppStore } from '@/store/useStore';
 
 export function useDashboard() {
   const setDashboard = useAppStore((s) => s.setDashboard);
+  const aiStatus = useAppStore((s) => s.aiStatus);
   const setAIStatus = useAppStore((s) => s.setAIStatus);
+
+  const isProcessing = aiStatus.status === 'pending' || aiStatus.status === 'running';
 
   return useQuery({
     queryKey: ['dashboard'],
@@ -17,6 +20,7 @@ export function useDashboard() {
       setAIStatus(status as Parameters<typeof setAIStatus>[0]);
       return dashboard;
     },
+    refetchInterval: isProcessing ? 5000 : false,
   });
 }
 
@@ -25,9 +29,10 @@ export function useJobs() {
   const filters = useAppStore((s) => s.jobFilters);
 
   return useQuery({
-    queryKey: ['jobs', filters],
+    queryKey: ['jobs', filters.search], // Re-fetch when search changes
     queryFn: async () => {
-      const jobs = await api.jobs.getAll();
+      const params = filters.search ? { search: filters.search } : undefined;
+      const jobs = await api.jobs.getAll(params);
       setJobs(jobs);
       return jobs;
     },

@@ -26,12 +26,17 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function withMockFallback<T>(fetcher: () => Promise<T>, fallback: T): Promise<T> {
+  if (USE_MOCK) {
+    await delay(500);
+    return fallback;
+  }
+  // Remove silent fallback so real API errors bubble up to the UI
   return await fetcher();
 }
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000,
+  timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -162,34 +167,7 @@ export const api = {
       ),
   },
 
-  tracker: {
-    get: () =>
-      withMockFallback(
-        async () => {
-          const { data } = await apiClient.get<TrackerData>('/api/tracker');
-          return data;
-        },
-        mockTracker,
-      ),
-    updateApplication: (id: string, stage: string) =>
-      withMockFallback(
-        async () => {
-          const { data } = await apiClient.put(`/api/tracker/${id}`, { stage });
-          return data;
-        },
-        { success: true, id, stage },
-      ),
-  },
-
   applications: {
-    updateApplication: (id: string, stage: string) =>
-      withMockFallback(
-        async () => {
-          const { data } = await apiClient.put(`/api/tracker/${id}`, { stage });
-          return data;
-        },
-        { success: true, id, stage },
-      ),
     apply: (jobId: string) =>
       withMockFallback(
         async () => {

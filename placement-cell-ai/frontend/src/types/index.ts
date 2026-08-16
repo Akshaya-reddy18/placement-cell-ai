@@ -1,10 +1,14 @@
-export type AIStatus = 'idle' | 'running' | 'completed' | 'failed';
+export type AIStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed';
 
 export interface CareerGoals {
   preferredRoles: string[];
   targetCompanies: string[];
-  workPreference: string;
-  location: string;
+  workPreference: string; // Keeping for backward compatibility
+  locations: string[];
+  workModes: string[];
+  employmentTypes: string[];
+  companyTypes: string[];
+  requiredConstraints: string[];
   salaryExpectation?: string;
 }
 
@@ -27,6 +31,7 @@ export interface AIStatusState {
   percentage: number;
   status: AIStatus;
   completedAgents: string[];
+  errorMessage?: string;
 }
 
 export interface DashboardMetrics {
@@ -60,18 +65,30 @@ export interface JobListing {
   location: string;
   salary?: string;
   matchPercentage: number;
+  matchReason?: string;
   requirements: string[];
   description: string;
   priority: 'high' | 'medium' | 'low';
   postedAt: string;
   source: string;
   url?: string;
+  job_url?: string;
+  apply_url?: string;
+  work_mode?: string;
+  employment_type?: string;
+  company_type?: string;
+  industry?: string;
+  is_verified?: boolean;
 }
 
 export interface JobFilters {
   search: string;
+  roles: string[];
   companies: string[];
   locations: string[];
+  workModes: string[];
+  employmentTypes: string[];
+  companyTypes: string[];
   salaryMin: number;
   skills: string[];
 }

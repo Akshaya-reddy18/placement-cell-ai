@@ -5,7 +5,10 @@ import asyncio
 import hashlib
 from datetime import datetime, timezone
 import io
-import fitz
+try:
+    import fitz
+except ImportError:
+    fitz = None
 
 
 from pydantic import BaseModel
@@ -83,15 +86,71 @@ def _normalize_student_payload(payload: dict) -> dict:
     }
 
 
-def _normalize_job(job: dict, student_data: Optional[dict] = None) -> dict:
-    student_skills = {skill.lower() for skill in (student_data or {}).get("skill_graph", {}).keys()}
+def _score_job(job: dict, student_data: Optional[dict]) -> tuple[int, str]:
+    if not student_data:
+        return 50, "Average match based on general job profile."
+
+    career_goals = student_data.get("career_goals") or {}
+    student_skills = {skill.lower() for skill in student_data.get("skill_graph", {}).keys()}
+    
+    # 1. Base requirements and skills (Max 50 points)
     requirements = job.get("requirements") or []
     requirements = requirements if isinstance(requirements, list) else [str(requirements)]
     requirement_hits = sum(1 for skill in requirements if str(skill).lower() in student_skills)
-    description = job.get("description", "")
-    description_hits = sum(1 for skill in student_skills if skill and skill in description.lower())
-    match_percentage = min(100, max(10, requirement_hits * 18 + description_hits * 4 + 20))
+    
+    desc_lower = job.get("description", "").lower()
+    description_hits = sum(1 for skill in student_skills if skill and skill in desc_lower)
+    
+    skill_score = min(50, requirement_hits * 10 + description_hits * 2)
+    
+    # 2. Company preference (Max 20 points)
+    company_score = 0
+    target_companies = [c.lower() for c in career_goals.get("target_companies", [])]
+    if job.get("company", "").lower() in target_companies:
+        company_score = 20
+        
+    # 3. Role preference (Max 15 points)
+    role_score = 0
+    preferred_roles = [r.lower() for r in career_goals.get("preferred_roles", [])]
+    job_title = job.get("title", "").lower()
+    if any(r in job_title for r in preferred_roles):
+        role_score = 15
+    elif any(r in job_title for r in ["engineer", "developer", "scientist", "analyst"]):
+        role_score = 5
 
+    # 4. Location preference (Max 15 points)
+    loc_score = 0
+    locations = [l.lower() for l in career_goals.get("locations", [])]
+    job_loc = job.get("location", "").lower()
+    if "remote" in job_loc:
+        loc_score = 15
+    elif any(l in job_loc for l in locations):
+        loc_score = 15
+
+    total_score = min(99, max(10, skill_score + company_score + role_score + loc_score))
+    
+    # Generate reason
+    reasons = []
+    if company_score > 0:
+        reasons.append("It is one of your target companies.")
+    if role_score == 15:
+        reasons.append("The role matches your career goals.")
+    if requirement_hits > 0:
+        matched = [s for s in requirements if str(s).lower() in student_skills][:3]
+        if matched:
+            reasons.append(f"Strong alignment with your experience in {', '.join(matched)}.")
+    
+    reason = " ".join(reasons) if reasons else "Good general fit based on your overall profile."
+    
+    return total_score, reason
+
+
+def _normalize_job(job: dict, student_data: Optional[dict] = None) -> dict:
+    match_percentage, match_reason = _score_job(job, student_data)
+    
+    # Ensure apply_url is properly extracted
+    apply_url = job.get("apply_url") or job.get("job_url") or job.get("url")
+    
     return {
         "id": job.get("id") or _job_identifier(job),
         "title": job.get("title", "Unknown Role"),
@@ -99,16 +158,23 @@ def _normalize_job(job: dict, student_data: Optional[dict] = None) -> dict:
         "location": job.get("location", "Remote"),
         "salary": job.get("salary"),
         "matchPercentage": match_percentage,
-        "requirements": requirements,
-        "description": description,
+        "matchReason": match_reason,
+        "requirements": job.get("requirements") or [],
+        "description": job.get("description", ""),
         "priority": job.get("priority") or ("high" if match_percentage >= 75 else "medium" if match_percentage >= 50 else "low"),
         "postedAt": job.get("posted_at") or job.get("postedAt") or "Recently",
         "source": job.get("source", "Live Search"),
-        "url": job.get("url"),
+        "url": apply_url,
+        "job_url": apply_url,
+        "apply_url": apply_url,
+        "work_mode": job.get("work_mode"),
+        "employment_type": job.get("employment_type"),
+        "company_type": job.get("company_type"),
+        "industry": job.get("industry"),
+        "is_verified": job.get("is_verified", True),
     }
 
-
-def _student_context(client, student_id: Optional[str]) -> dict[str, Any]:
+def _student_context(client, student_id: Optional[str]) -> dict:
     if not student_id:
         return {}
     try:
@@ -123,24 +189,57 @@ def _student_context(client, student_id: Optional[str]) -> dict[str, Any]:
     except Exception:
         return {}
 
-
 def _fetch_live_jobs(student_data: Optional[dict] = None, query: Optional[str] = None, location: str = "India") -> list[dict]:
+    career_goals = (student_data or {}).get("career_goals") or {}
+    
     if query:
         role_queries = [query]
     else:
-        preferred_roles = (((student_data or {}).get("career_goals") or {}).get("preferred_roles") or ["Software Engineer"])
-        role_queries = preferred_roles[:3]
+        preferred_roles = career_goals.get("preferred_roles") or ["Software Engineer"]
+        role_queries = preferred_roles.copy()
+        
+        # Add related roles logic
+        lower_roles = [r.lower() for r in preferred_roles]
+        if any("ai" in r or "machine learning" in r for r in lower_roles):
+            role_queries.extend(["ML Engineer", "Data Scientist", "GenAI Engineer"])
+        if any("backend" in r for r in lower_roles):
+            role_queries.extend(["Backend Engineer", "Software Engineer", "API Developer"])
+        if any("frontend" in r for r in lower_roles):
+            role_queries.extend(["React Developer", "UI Engineer", "Frontend Developer"])
+            
+        # Deduplicate and limit to top 3 searches to avoid excessive LLM/API calls
+        role_queries = list(dict.fromkeys(role_queries))[:3]
+
+    locations = career_goals.get("locations") or [location]
+    loc = locations[0] if locations else "India"
+    
+    target_companies = career_goals.get("target_companies") or []
 
     scraped: list[dict] = []
     seen: set[str] = set()
+    
+    queries = []
+    # If student has target companies, ensure we search for them specifically first
+    if target_companies:
+        for c in target_companies[:2]:  # Limit to top 2 to save requests
+            queries.append(f"{role_queries[0]} at {c}")
+            
+    # Then generic roles
     for role in role_queries:
-        results = scrape_jobs_serpapi.invoke({"query": f"{role} jobs", "location": location}) if False else scrape_jobs_serpapi.invoke(f"{role} jobs in {location}")
+        queries.append(f"{role} jobs in {loc}")
+        
+    queries = list(dict.fromkeys(queries))[:4] # Limit total queries
+
+    for q in queries:
+        results = scrape_jobs_serpapi.invoke(q)
         for job in results or []:
-            key = f"{job.get('title', '')}-{job.get('company', '')}-{job.get('url', '')}"
+            key = f"{job.get('title', '')}-{job.get('company', '')}-{job.get('job_url', job.get('url', ''))}"
             if key in seen:
                 continue
             seen.add(key)
-            scraped.append(_normalize_job(job, student_data))
+            
+            normalized_job = _normalize_job(job, student_data)
+            scraped.append(normalized_job)
 
     saved_jobs: list[dict] = []
     for job in scraped:
@@ -149,17 +248,24 @@ def _fetch_live_jobs(student_data: Optional[dict] = None, query: Optional[str] =
                 "title": job["title"],
                 "company": job["company"],
                 "source": job.get("source"),
-                "url": job.get("url"),
+                "url": job.get("apply_url") or job.get("job_url") or job.get("url"),
                 "description": job.get("description"),
                 "requirements": job.get("requirements"),
                 "location": job.get("location"),
                 "experience_level": job.get("priority"),
-                "posted_at": job.get("postedAt"),
+                "posted_at": job.get("postedAt") or job.get("posted_at"),
+                "work_mode": job.get("work_mode"),
+                "employment_type": job.get("employment_type"),
+                "company_type": job.get("company_type"),
                 "is_active": True,
             })
             saved_jobs.append({**job, "id": saved.get("id", job["id"])})
         except Exception:
+            # Memory fallback when Supabase is unavailable
             saved_jobs.append(job)
+            
+    # Sort by match percentage ranking
+    saved_jobs.sort(key=lambda x: x.get("matchPercentage", 0), reverse=True)
     return saved_jobs
 
 
@@ -174,6 +280,7 @@ def _analysis_status_payload(student_id: Optional[str], client) -> dict:
                 "percentage": int(row.get("percentage") or 0),
                 "status": row.get("status") or "idle",
                 "completed_agents": row.get("completed_agents") or [],
+                "error_message": row.get("error_message"),
             }
     return {
         "student_id": student_id or "demo",
@@ -181,6 +288,7 @@ def _analysis_status_payload(student_id: Optional[str], client) -> dict:
         "percentage": 0,
         "status": "idle",
         "completed_agents": [],
+        "error_message": None,
     }
 
 
@@ -310,11 +418,11 @@ def _career_payload(student_id: Optional[str], client) -> dict:
         "focusRecommendation": focus if isinstance(focus, str) else str(focus),
         "placementProbability": probability,
         "targetCompanies": target_companies[:10],
-        "milestones": [],
-        "skillGaps": [{"skill": skill, "priority": "critical", "marketDemand": 0} for skill in ((strategy or {}).get("red_flags") or [])[:3]],
-        "learningRecommendations": (strategy or {}).get("quick_wins") or [],
-        "marketInsights": [],
-        "packageProjection": {"min": 0, "max": 0},
+        "milestones": (strategy or {}).get("milestones") or [],
+        "skillGaps": (strategy or {}).get("skill_gaps") or [],
+        "learningRecommendations": (strategy or {}).get("learning_recommendations") or [],
+        "marketInsights": (strategy or {}).get("market_insights") or [],
+        "packageProjection": (strategy or {}).get("package_projection") or {"min": 0, "max": 0},
     }
 
 
@@ -377,7 +485,7 @@ async def create_student(student: StudentInput):
 
 
 @router.post("/onboarding", response_model=dict)
-async def onboarding(payload: dict):
+async def onboarding(payload: dict, background_tasks: BackgroundTasks):
     client = supabase_client.get_supabase_client()
     student_data = _normalize_student_payload(payload)
     try:
@@ -387,6 +495,10 @@ async def onboarding(payload: dict):
 
         student_id = result.data[0].get("id")
         supabase_client.update_analysis_status(student_id, "starting", [], 0, "pending")
+        
+        # Trigger background analysis pipeline
+        background_tasks.add_task(run_placement_analysis, student_id, student_data)
+        
         return {"student_id": student_id, "message": "Student created successfully"}
     except Exception as e:
         logger.error(f"Error onboarding student: {e}")
@@ -516,8 +628,25 @@ class ChatPayload(BaseModel):
     student_id: Optional[str] = None
 
 @router.post("/interview/chat")
-async def chat_interview(payload: ChatPayload):
-    prompt = "You are an expert technical interviewer conducting a mock interview with a candidate. Keep your responses conversational, concise, and professional. Ask one question at a time.\n\nConversation history:\n"
+async def chat_interview(payload: ChatPayload, x_student_id: Optional[str] = Header(None, alias="X-Student-Id")):
+    client = supabase_client.get_supabase_client()
+    student_id = payload.student_id or _current_student_id(client, x_student_id)
+    
+    context = ""
+    if student_id:
+        student_data = _student_context(client, student_id)
+        career_goals = (student_data.get("student") or {}).get("career_goals") or {}
+        preferred_roles = career_goals.get("preferred_roles") or ["Software Engineer"]
+        target_role = preferred_roles[0] if preferred_roles else "Software Engineer"
+        context = f"The candidate is interviewing for the role of {target_role}.\n"
+    
+    prompt = f"""You are an expert technical interviewer conducting a mock interview with a candidate.
+{context}
+Keep your responses conversational, concise, and professional. 
+Evaluate their previous answer (if any) briefly, and then ask ONE relevant technical or behavioral question. Do NOT ask multiple questions at once.
+
+Conversation history:
+"""
     for msg in payload.history:
         role = "Interviewer" if msg.get("role") == "assistant" else "Candidate"
         prompt += f"{role}: {msg.get('content')}\n"
@@ -614,6 +743,8 @@ async def upload_resume(student_id: str, file: UploadFile = File(...), backgroun
     """Upload a PDF resume."""
     try:
         content = await file.read()
+        if fitz is None:
+            raise HTTPException(status_code=500, detail="PyMuPDF is not available on this system.")
         doc = fitz.open(stream=content, filetype="pdf")
         text = ""
         for page in doc:

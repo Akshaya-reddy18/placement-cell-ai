@@ -275,7 +275,7 @@ export const mockTracker: TrackerData = {
 
 export const mockAIStatus = {
   currentAgent: 'career_strategy_agent',
-  percentage: 85,
-  status: 'running' as const,
-  completedAgents: ['profile_agent', 'job_match_agent', 'ats_agent', 'skill_gap_agent', 'interview_agent'],
+  percentage: 100,
+  status: 'completed' as const,
+  completedAgents: ['profile_agent', 'job_match_agent', 'ats_agent', 'skill_gap_agent', 'interview_agent', 'career_strategy_agent'],
 };

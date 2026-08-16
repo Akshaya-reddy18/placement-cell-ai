@@ -56,9 +56,15 @@ export function JobCard({ job, compact = false, onViewDetails, onApply, classNam
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-2">
-          <div className="text-right">
+          <div className="text-right group relative">
             <p className="text-lg font-semibold text-slate-100">{job.matchPercentage}%</p>
             <p className="text-xs text-slate-500">match</p>
+            {job.matchReason && (
+              <div className="absolute right-0 top-full z-10 mt-2 hidden w-64 rounded-md border border-slate-700 bg-slate-800 p-2 text-left text-xs text-slate-300 shadow-xl group-hover:block">
+                <p className="font-medium text-slate-200 mb-1">Why this job is recommended</p>
+                {job.matchReason}
+              </div>
+            )}
           </div>
           <StatusBadge status={job.priority} />
         </div>
