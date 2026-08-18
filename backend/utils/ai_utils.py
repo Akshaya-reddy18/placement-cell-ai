@@ -7,10 +7,11 @@ from typing import Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 
-def get_gemini_llm(temperature: float = 0.0) -> ChatGoogleGenerativeAI:
+def get_gemini_llm(model_name: str = None, temperature: float = 0.0) -> ChatGoogleGenerativeAI:
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    model = model_name or os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model=model,
         google_api_key=api_key,
         temperature=temperature,
     )
@@ -45,21 +46,38 @@ def safe_json_loads(text: str, default: Any) -> Any:
 
 
 def call_gemini_json(prompt: str, default: Any, temperature: float = 0.0) -> Any:
-    try:
-        llm = get_gemini_llm(temperature=temperature)
-        response = llm.invoke(prompt)
-        return safe_json_loads(response.content, default)
-    except Exception:
-        return default
+    configured_model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    models_to_try = [configured_model, "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
+    seen = set()
+    unique_models = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
+    for model_name in unique_models:
+        try:
+            llm = get_gemini_llm(model_name=model_name, temperature=temperature)
+            response = llm.invoke(prompt)
+            result = safe_json_loads(response.content, None)
+            if result is not None:
+                return result
+        except Exception:
+            continue
+    return default
 
 
 def call_gemini_text(prompt: str, default: str = "", temperature: float = 0.0) -> str:
-    try:
-        llm = get_gemini_llm(temperature=temperature)
-        response = llm.invoke(prompt)
-        return response.content.strip()
-    except Exception:
-        return default
+    configured_model = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+    models_to_try = [configured_model, "gemini-flash-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
+    seen = set()
+    unique_models = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
+    for model_name in unique_models:
+        try:
+            llm = get_gemini_llm(model_name=model_name, temperature=temperature)
+            response = llm.invoke(prompt)
+            if response and response.content and response.content.strip():
+                return response.content.strip()
+        except Exception:
+            continue
+    return default
 
 
 def simple_tokens(text: str) -> list[str]:

@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ProgressRing } from '@/components/shared/ProgressRing';
 import { useOnboardingSubmit } from '@/hooks/useQueries';
+import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import type { CareerGoals, OnboardingPayload } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -27,9 +29,15 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const submitOnboarding = useOnboardingSubmit();
   const [step, setStep] = useState(0);
+  const isAuthenticated = !!localStorage.getItem('pc_token') && localStorage.getItem('pc_token') !== 'guest_token';
   const [loading, setLoading] = useState(false);
   const [skillInput, setSkillInput] = useState('');
   const [companyInput, setCompanyInput] = useState('');
+  
+  const [rolesText, setRolesText] = useState(defaultGoals.preferredRoles.join(', '));
+  const [locationsText, setLocationsText] = useState(defaultGoals.locations.join(', '));
+  const [constraintsText, setConstraintsText] = useState(defaultGoals.requiredConstraints.join(', '));
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
   const [form, setForm] = useState<OnboardingPayload>({
     name: '',
@@ -75,9 +83,40 @@ export default function OnboardingPage() {
 
   const handleSubmit = async () => {
     setLoading(true);
+    // Ensure we have a valid token or fallback to guest session
+    const currentToken = localStorage.getItem('pc_token');
+    if (!currentToken || currentToken === 'guest_token') {
+      localStorage.setItem('pc_token', 'guest_token');
+      localStorage.setItem('pc_student_id', '00000000-0000-0000-0000-000000000000');
+    } else {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!data?.session) {
+          localStorage.setItem('pc_token', 'guest_token');
+          localStorage.setItem('pc_student_id', '00000000-0000-0000-0000-000000000000');
+        } else {
+          localStorage.setItem('pc_token', data.session.access_token);
+        }
+      } catch {
+        localStorage.setItem('pc_token', 'guest_token');
+        localStorage.setItem('pc_student_id', '00000000-0000-0000-0000-000000000000');
+      }
+    }
+    
     try {
-      await submitOnboarding(form);
+      const user = await submitOnboarding(form);
+      if (resumeFile) {
+        try {
+          await api.resume.upload(resumeFile);
+        } catch (uploadErr) {
+          console.warn("Resume upload during onboarding:", uploadErr);
+        }
+      }
       navigate('/dashboard');
+    } catch (err: any) {
+      const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+      alert(`Onboarding Error: ${detail || 'Unknown error occurred.'}`);
+      console.error("Onboarding submission failed:", err);
     } finally {
       setLoading(false);
     }
@@ -85,6 +124,9 @@ export default function OnboardingPage() {
 
   const handleGuestLogin = async () => {
     setLoading(true);
+    // Set mock tokens before submitting so it triggers mock fallback
+    localStorage.setItem('pc_token', 'guest_token');
+    localStorage.setItem('pc_student_id', '00000000-0000-0000-0000-000000000000');
     try {
       const guestForm: OnboardingPayload = {
         name: 'Guest User',
@@ -108,6 +150,9 @@ export default function OnboardingPage() {
       };
       await submitOnboarding(guestForm);
       navigate('/dashboard');
+    } catch (err: any) {
+      alert(`Guest Login Error: ${err.message || 'Unknown error occurred.'}`);
+      console.error("Guest login failed:", err);
     } finally {
       setLoading(false);
     }
@@ -222,9 +267,13 @@ export default function OnboardingPage() {
                     type="file"
                     accept=".pdf"
                     className="hidden"
-                    onChange={(e) =>
-                      update({ resumeFileName: e.target.files?.[0]?.name ?? undefined })
-                    }
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setResumeFile(file);
+                        update({ resumeFileName: file.name });
+                      }
+                    }}
                   />
                   <span className="inline-flex h-8 items-center rounded-lg border border-slate-700 px-3 text-sm text-slate-300 hover:border-slate-600">
                     Choose file
@@ -241,32 +290,55 @@ export default function OnboardingPage() {
                 <Field label="Preferred roles (comma separated)">
                   <Input
                     placeholder="Backend Engineer, Full Stack"
-                    value={form.careerGoals.preferredRoles.join(', ')}
-                    onChange={(e) =>
+                    value={rolesText}
+                    onChange={(e) => {
+                      setRolesText(e.target.value);
                       update({
                         careerGoals: {
                           ...form.careerGoals,
                           preferredRoles: e.target.value.split(',').map((r) => r.trim()).filter(Boolean),
                         },
-                      })
-                    }
+                      });
+                    }}
                   />
                 </Field>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-300">Experience Level</label>
+                  <div className="flex flex-wrap gap-2">
+                    {['Fresher', '0-1 years', '2-3 years', '3+ years'].map((level) => {
+                      const isSelected = form.careerGoals.experienceLevel === level;
+                      return (
+                        <Badge 
+                          key={level} 
+                          variant={isSelected ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            update({ careerGoals: { ...form.careerGoals, experienceLevel: level } });
+                          }}
+                        >
+                          {level}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-slate-300">Locations (comma separated)</label>
                     <Input
                       placeholder="Bangalore, Pune, Remote"
-                      value={form.careerGoals.locations.join(', ')}
-                      onChange={(e) =>
+                      value={locationsText}
+                      onChange={(e) => {
+                        setLocationsText(e.target.value);
                         update({
                           careerGoals: {
                             ...form.careerGoals,
                             locations: e.target.value.split(',').map((l) => l.trim()).filter(Boolean),
                           }
-                        })
-                      }
+                        });
+                      }}
                     />
                   </div>
 
@@ -346,15 +418,16 @@ export default function OnboardingPage() {
                     <label className="text-sm font-medium text-slate-300">Required Constraints (e.g. Visa Sponsorship, No Relocation)</label>
                     <Input
                       placeholder="Sponsorship required..."
-                      value={form.careerGoals.requiredConstraints.join(', ')}
-                      onChange={(e) =>
+                      value={constraintsText}
+                      onChange={(e) => {
+                        setConstraintsText(e.target.value);
                         update({
                           careerGoals: {
                             ...form.careerGoals,
                             requiredConstraints: e.target.value.split(',').map((c) => c.trim()).filter(Boolean),
                           }
-                        })
-                      }
+                        });
+                      }}
                     />
                   </div>
                 </div>
@@ -373,15 +446,17 @@ export default function OnboardingPage() {
                 <ArrowLeft className="mr-1 h-4 w-4" />
                 Back
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-slate-700 text-slate-300"
-                onClick={handleGuestLogin}
-                disabled={loading}
-              >
-                Guest Login
-              </Button>
+              {!isAuthenticated && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-slate-700 text-slate-300"
+                  onClick={handleGuestLogin}
+                  disabled={loading}
+                >
+                  Guest Login
+                </Button>
+              )}
             </div>
             {step < STEPS.length - 1 ? (
               <Button type="button" onClick={() => setStep((s) => s + 1)}>
@@ -395,6 +470,20 @@ export default function OnboardingPage() {
               </Button>
             )}
           </div>
+
+          {!isAuthenticated && (
+            <div className="mt-8 border-t border-slate-800 pt-6 text-center">
+              <p className="mb-4 text-sm text-slate-400">You must have an account to save your profile.</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate('/register')}
+                className="w-full sm:w-auto"
+              >
+                Go to Register / Login
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="hidden border-l border-slate-800 bg-slate-900/20 p-10 lg:flex lg:flex-col lg:justify-center">

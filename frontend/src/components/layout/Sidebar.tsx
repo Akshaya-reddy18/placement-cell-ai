@@ -53,7 +53,35 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t border-slate-800 p-4">
-        <p className="text-xs text-slate-500">Powered by Gemini AI</p>
+        <button
+          onClick={async () => {
+            await import('@/lib/supabase').then(m => m.supabase.auth.signOut());
+            localStorage.removeItem('pc_token');
+            const { useAppStore } = await import('@/store/useStore');
+            useAppStore.getState().setUser(null);
+            window.location.href = '/login';
+          }}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-900 hover:text-red-400"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          Log out
+        </button>
+        <p className="mt-4 text-xs text-slate-500">Powered by Gemini AI</p>
       </div>
     </aside>
   );

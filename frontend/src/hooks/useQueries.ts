@@ -29,10 +29,9 @@ export function useJobs() {
   const filters = useAppStore((s) => s.jobFilters);
 
   return useQuery({
-    queryKey: ['jobs', filters.search], // Re-fetch when search changes
+    queryKey: ['jobs', filters], // Re-fetch when any filter changes
     queryFn: async () => {
-      const params = filters.search ? { search: filters.search } : undefined;
-      const jobs = await api.jobs.getAll(params);
+      const jobs = await api.jobs.getAll(filters);
       setJobs(jobs);
       return jobs;
     },

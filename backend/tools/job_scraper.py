@@ -68,7 +68,7 @@ def is_valid_apply_url(url: str) -> bool:
     url_lower = url.lower()
     if "google.com/search" in url_lower: return False
     if "bing.com/search" in url_lower: return False
-    if "google.com/url" in url_lower: return False
+    # Allow google.com/url as it is just a redirect to the real ATS tracking link
     return True
 
 @tool
@@ -145,10 +145,12 @@ def scrape_jobs_serpapi(query: str, location: str = "India", num_results: int = 
                 company = job.get("company_name", "")
                 desc = job.get("description", "")
                 
-                # Check for basic keyword match if query exists
-                if search_term and search_term not in title.lower() and search_term not in desc.lower():
-                    continue
-                    
+                # Let the backend score and filter the Arbeitnow jobs rather than dropping them aggressively here.
+                # Just do a soft check on the role if search_term is present
+                if search_term:
+                    search_words = search_term.split()
+                    if not any(w in title.lower() or w in desc.lower() for w in search_words):
+                        continue
                 key = f"{title}-{company}"
                 if key in seen:
                     continue

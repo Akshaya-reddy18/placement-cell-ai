@@ -30,16 +30,16 @@ export default function JobsPage() {
 
   const openJobDetails = (job: JobListing) => {
     const destination = job.apply_url || job.job_url || job.url;
-    if (destination && !destination.includes('google.com/search')) {
+    if (destination) {
       window.open(destination, '_blank', 'noopener,noreferrer');
     }
   };
 
   const filteredJobs = useMemo(() => {
     return jobs.filter((job) => {
-      // Must have a valid URL
+      // Must have a valid URL — backend already filters google.com/search but double-check here
       const hasValidUrl = job.apply_url || job.job_url || job.url;
-      if (!hasValidUrl || hasValidUrl.includes('google.com/search')) return false;
+      if (!hasValidUrl) return false;
 
       const searchLower = filters.search.toLowerCase();
       const searchMatch =
@@ -48,20 +48,51 @@ export default function JobsPage() {
         job.company.toLowerCase().includes(searchLower) ||
         (job.description && job.description.toLowerCase().includes(searchLower));
       
-      const roleMatch = filters.roles.length === 0 || filters.roles.some((r) => job.title.toLowerCase().includes(r.toLowerCase()));
-      const companyMatch = filters.companies.length === 0 || filters.companies.includes(job.company);
-      const locationMatch = filters.locations.length === 0 || filters.locations.includes(job.location);
-      const workModeMatch = filters.workModes.length === 0 || (job.work_mode && filters.workModes.includes(job.work_mode));
-      const empTypeMatch = filters.employmentTypes.length === 0 || (job.employment_type && filters.employmentTypes.includes(job.employment_type));
-      const companyTypeMatch = filters.companyTypes.length === 0 || (job.company_type && filters.companyTypes.includes(job.company_type));
+      // Role: case-insensitive substring match
+      const roleMatch =
+        filters.roles.length === 0 ||
+        filters.roles.some((r) => job.title.toLowerCase().includes(r.toLowerCase()));
       
+      // Company: case-insensitive substring match (not exact)
+      const companyMatch =
+        filters.companies.length === 0 ||
+        filters.companies.some((c) => job.company.toLowerCase().includes(c.toLowerCase()));
+      
+      // Location: case-insensitive substring match
+      const locationMatch =
+        filters.locations.length === 0 ||
+        filters.locations.some((l) => job.location.toLowerCase().includes(l.toLowerCase()));
+      
+      // Work mode: case-insensitive
+      const workModeMatch =
+        filters.workModes.length === 0 ||
+        !job.work_mode ||
+        filters.workModes.some((wm) => job.work_mode!.toLowerCase() === wm.toLowerCase());
+      
+      // Employment type: case-insensitive
+      const empTypeMatch =
+        filters.employmentTypes.length === 0 ||
+        !job.employment_type ||
+        filters.employmentTypes.some((et) => job.employment_type!.toLowerCase() === et.toLowerCase());
+      
+      // Company type: case-insensitive
+      const companyTypeMatch =
+        filters.companyTypes.length === 0 ||
+        !job.company_type ||
+        filters.companyTypes.some((ct) => job.company_type!.toLowerCase() === ct.toLowerCase());
+      
+      // Skill: case-insensitive match in requirements array or description
       const skillMatch =
         filters.skills.length === 0 ||
-        filters.skills.some((s) => job.requirements && job.requirements.includes(s));
+        filters.skills.some((s) =>
+          (job.requirements && job.requirements.some((r) => r.toLowerCase().includes(s.toLowerCase()))) ||
+          (job.description && job.description.toLowerCase().includes(s.toLowerCase()))
+        );
         
       return searchMatch && roleMatch && companyMatch && locationMatch && workModeMatch && empTypeMatch && companyTypeMatch && skillMatch;
     });
   }, [jobs, filters]);
+
 
   const { recommended, preferred, related } = useMemo(() => {
     const sorted = [...filteredJobs].sort((a, b) => b.matchPercentage - a.matchPercentage);
@@ -121,18 +152,21 @@ export default function JobsPage() {
                 options={FILTER_OPTIONS.companies}
                 selected={filters.companies}
                 onToggle={(v) => toggleFilter('companies', v)}
+                allowCustom={true}
               />
               <FilterGroup
                 title="Roles"
                 options={FILTER_OPTIONS.roles}
                 selected={filters.roles}
                 onToggle={(v) => toggleFilter('roles', v)}
+                allowCustom={true}
               />
               <FilterGroup
                 title="Locations"
                 options={FILTER_OPTIONS.locations}
                 selected={filters.locations}
                 onToggle={(v) => toggleFilter('locations', v)}
+                allowCustom={true}
               />
               <FilterGroup
                 title="Work Mode"
@@ -157,6 +191,7 @@ export default function JobsPage() {
                 options={FILTER_OPTIONS.skills}
                 selected={filters.skills}
                 onToggle={(v) => toggleFilter('skills', v)}
+                allowCustom={true}
               />
             </div>
           </SectionCard>
@@ -265,22 +300,40 @@ export default function JobsPage() {
   );
 }
 
+import { useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+
 function FilterGroup({
   title,
   options,
   selected,
   onToggle,
+  allowCustom,
 }: {
   title: string;
   options: string[];
   selected: string[];
   onToggle: (value: string) => void;
+  allowCustom?: boolean;
 }) {
+  const [customVal, setCustomVal] = useState('');
+  
+  // Combine provided options with any selected custom options
+  const allOptions = Array.from(new Set([...options, ...selected]));
+
+  const handleAdd = () => {
+    if (customVal.trim() && !selected.includes(customVal.trim())) {
+      onToggle(customVal.trim());
+    }
+    setCustomVal('');
+  };
+
   return (
     <div>
       <p className="mb-2 text-xs font-medium text-slate-400">{title}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {options.map((option) => (
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {allOptions.map((option) => (
           <button
             key={option}
             type="button"
@@ -291,6 +344,18 @@ function FilterGroup({
           </button>
         ))}
       </div>
+      {allowCustom && (
+        <div className="flex gap-2">
+          <Input 
+            placeholder={`Add ${title.toLowerCase()}...`}
+            value={customVal}
+            onChange={(e) => setCustomVal(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAdd())}
+            className="h-8 text-xs"
+          />
+          <Button type="button" variant="outline" size="sm" onClick={handleAdd} className="h-8">Add</Button>
+        </div>
+      )}
     </div>
   );
 }

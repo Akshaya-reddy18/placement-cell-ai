@@ -82,3 +82,7 @@ class AnalysisStatusResponse(BaseModel):
     percentage: int
     status: str
     completed_agents: List[str] = Field(default_factory=list)
+
+class ChatPayload(BaseModel):
+    student_id: Optional[str] = None
+    history: List[Dict[str, Any]] = Field(default_factory=list)

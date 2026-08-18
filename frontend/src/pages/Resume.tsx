@@ -72,12 +72,16 @@ export default function ResumePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Resume Optimizer"
-        description="ATS analysis, keyword optimization, and tailored resume versions for your target roles."
+        title={data?.targetRole ? `Resume Optimizer · ${data.targetRole}` : "Resume Optimizer"}
+        description={
+          data?.targetRole
+            ? `ATS analysis, keyword optimization, and tailored resume version for ${data.targetRole}${data.targetCompany ? ` at ${data.targetCompany}` : ''}.`
+            : "ATS analysis, keyword optimization, and tailored resume versions for your target roles."
+        }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[240px_1fr_280px]">
-        <SectionCard title="Upload resume">
+      <div className="grid gap-8 lg:grid-cols-[280px_1fr_300px] xl:grid-cols-[300px_1fr_320px]">
+        <SectionCard title="Uploaded resume">
           <div className="rounded-lg border border-dashed border-slate-700 p-6 text-center">
             {isUploading ? (
               <Loader2 className="mx-auto mb-3 h-6 w-6 animate-spin text-slate-500" />
@@ -85,10 +89,14 @@ export default function ResumePage() {
               <Upload className="mx-auto mb-3 h-6 w-6 text-slate-500" />
             )}
             <p className="text-sm text-slate-300">
-              {isUploading ? "Uploading..." : data?.originalExcerpt ? "Resume uploaded" : "No resume found"}
+              {isUploading ? "Uploading..." : data?.originalExcerpt ? "Resume uploaded & analyzed" : "No resume found"}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {isUploading ? "Please wait while we parse it." : "Upload a PDF to analyze ATS compatibility."}
+              {isUploading
+                ? "Please wait while AI analyzes it..."
+                : data?.targetRole
+                ? `Analyzed for ${data.targetRole}`
+                : "Upload a PDF to analyze ATS compatibility."}
             </p>
             
             <input 
@@ -105,11 +113,13 @@ export default function ResumePage() {
               disabled={isUploading}
               onClick={() => fileInputRef.current?.click()}
             >
-              {data?.originalExcerpt ? "Re-upload" : "Upload PDF"}
+              {data?.originalExcerpt ? "Re-upload Resume" : "Upload PDF"}
             </Button>
           </div>
           <div className="mt-4 space-y-2">
-            <p className="text-xs font-medium text-slate-400">Missing keywords</p>
+            <p className="text-xs font-medium text-slate-400">
+              Missing keywords {data?.targetRole ? `(${data.targetRole})` : ''}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {data.missingKeywords.map((kw) => (
                 <Badge key={kw} variant="warning">{kw}</Badge>
@@ -121,10 +131,10 @@ export default function ResumePage() {
         <div className="space-y-6">
           <ResumeScoreCard overall={data.scores.overall} scores={scoreItems} />
 
-          <SectionCard title="Before / After comparison">
+          <SectionCard title={`Before / After Comparison · ${data?.targetRole || 'Target Role'}`}>
             <div className="grid gap-4 md:grid-cols-2">
-              <ComparisonBlock title="Original summary" text={data.originalExcerpt} />
-              <ComparisonBlock title="Optimized summary" text={data.optimizedExcerpt} highlight />
+              <ComparisonBlock title="Original Resume (Uploaded)" text={data.originalExcerpt} />
+              <ComparisonBlock title={`AI-Optimized for ${data?.targetRole || 'Target Role'}`} text={data.optimizedExcerpt} highlight />
             </div>
           </SectionCard>
 
@@ -181,9 +191,11 @@ export default function ResumePage() {
 
 function ComparisonBlock({ title, text, highlight }: { title: string; text: string; highlight?: boolean }) {
   return (
-    <div className={cn('rounded-lg border p-4', highlight ? 'border-slate-600 bg-slate-800/30' : 'border-slate-800')}>
-      <p className="mb-2 text-xs font-medium text-slate-400">{title}</p>
-      <p className="text-sm leading-relaxed text-slate-300">{text}</p>
+    <div className={cn('rounded-sm border p-4 flex flex-col', highlight ? 'border-slate-600 bg-slate-800/30' : 'border-slate-800')}>
+      <p className="mb-2 text-xs font-medium text-slate-400 shrink-0">{title}</p>
+      <div className="max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+        <p className="text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words">{text}</p>
+      </div>
     </div>
   );
 }

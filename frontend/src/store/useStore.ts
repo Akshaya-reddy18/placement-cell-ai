@@ -106,7 +106,7 @@ export const useAppStore = create<AppStore>()(
     {
       name: 'placement-cell-store-v2',
       partialize: (state) => ({
-        // user: state.user, // Do not keep logged in by default
+        user: state.user,
         aiStatus: state.aiStatus,
       }),
     },

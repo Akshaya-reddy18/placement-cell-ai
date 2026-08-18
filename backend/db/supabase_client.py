@@ -59,6 +59,11 @@ class _LocalQuery:
         self._on_conflict = on_conflict
         return self
 
+    def update(self, record: dict):
+        self._mode = "update"
+        self._record = copy.deepcopy(record)
+        return self
+
     def eq(self, field: str, value: object):
         self._filters.append((field, value))
         return self
@@ -110,8 +115,20 @@ class _LocalQuery:
             rows.append(record)
             return _LocalResponse([copy.deepcopy(record)])
 
+        if self._mode == "update" and self._record is not None:
+            update_data = copy.deepcopy(self._record)
+            updated = []
+            for index, existing in enumerate(rows):
+                match = all(existing.get(field) == value for field, value in self._filters)
+                if match:
+                    merged = {**existing, **update_data}
+                    rows[index] = merged
+                    updated.append(copy.deepcopy(merged))
+            return _LocalResponse(updated)
+
         filtered = self._apply_filters(rows)
         return _LocalResponse(self._project(filtered))
+
 
 
 class _LocalRpc:
@@ -158,6 +175,17 @@ class _LocalSupabaseClient:
     def rpc(self, function_name: str, payload: dict):
         return _LocalRpc(function_name, payload)
 
+    @property
+    def auth(self):
+        class MockAuth:
+            def get_user(self, token):
+                class MockUser:
+                    id = "local-user-id"
+                class MockRes:
+                    user = MockUser()
+                return MockRes()
+        return MockAuth()
+
 
 class _FallbackQuery:
     def __init__(self, remote_query, local_query):
@@ -177,6 +205,11 @@ class _FallbackQuery:
     def upsert(self, record: dict, on_conflict: str | None = None):
         self._remote_query = self._remote_query.upsert(record, on_conflict=on_conflict)
         self._local_query.upsert(record, on_conflict=on_conflict)
+        return self
+
+    def update(self, record: dict):
+        self._remote_query = self._remote_query.update(record)
+        self._local_query.update(record)
         return self
 
     def eq(self, field: str, value: object):
@@ -246,18 +279,25 @@ class _FallbackSupabaseClient:
     def rpc(self, function_name: str, payload: dict):
         return _FallbackRpc(self._remote_client.rpc(function_name, payload), self._local_client.rpc(function_name, payload))
 
+    @property
+    def auth(self):
+        return self._remote_client.auth
+
 
 def get_supabase_client() -> object:
     url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY")
-    if not url or not key or create_client is None:
-        return _LocalSupabaseClient()
+    key = os.getenv("SUPABASE_SERVICE_KEY")
+    
+    if not url or not key:
+        raise ValueError("Backend requires SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables.")
+        
+    if create_client is None:
+        raise RuntimeError("supabase-py library is not installed.")
 
-    try:
-        remote_client = create_client(url, key)
-        return _FallbackSupabaseClient(remote_client, _LocalSupabaseClient())
-    except Exception:
-        return _LocalSupabaseClient()
+    remote_client = create_client(url, key)
+    # Using Fallback client so that if remote fails temporarily, it uses local memory (useful during dev)
+    # but the service key is strictly required to initialize the remote client.
+    return _FallbackSupabaseClient(remote_client, _LocalSupabaseClient())
 
 
 def update_analysis_status(
@@ -368,19 +408,30 @@ def save_referral(student_id: str, referral_data: dict) -> None:
 def save_career_strategy(student_id: str, strategy_data: dict) -> None:
     """Save career strategy to Supabase."""
     client = get_supabase_client()
-    focus = strategy_data.get("focusRecommendation")
+    focus = strategy_data.get("focusRecommendation") or strategy_data.get("focus_recommendation") or ""
+    target_companies = strategy_data.get("targetCompanies") or strategy_data.get("target_companies") or []
+    placement_probability = strategy_data.get("placementProbability") or strategy_data.get("placement_probability") or 0
+    milestones = strategy_data.get("milestones") or []
+    skill_gaps = strategy_data.get("skillGaps") or strategy_data.get("skill_gaps") or []
+    learning_recs = strategy_data.get("learningRecommendations") or strategy_data.get("learning_recommendations") or []
+    market_insights = strategy_data.get("marketInsights") or strategy_data.get("market_insights") or []
+    package_proj = strategy_data.get("packageProjection") or strategy_data.get("package_projection") or {"min": 0, "max": 0}
     
-    client.table("career_strategies").upsert({
+    record = {
         "student_id": student_id,
-        "target_companies": strategy_data.get("targetCompanies"),
-        "focus_recommendation": focus,
-        "placement_probability": strategy_data.get("placementProbability"),
-        "milestones": strategy_data.get("milestones"),
-        "skill_gaps": strategy_data.get("skillGaps"),
-        "learning_recommendations": strategy_data.get("learningRecommendations"),
-        "market_insights": strategy_data.get("marketInsights"),
-        "package_projection": strategy_data.get("packageProjection"),
-    }, on_conflict="student_id").execute()
+        "target_companies": target_companies,
+        "focus_recommendation": str(focus),
+        "placement_probability": float(placement_probability),
+        "milestones": milestones,
+        "skill_gaps": skill_gaps,
+        "learning_recommendations": learning_recs,
+        "market_insights": market_insights,
+        "package_projection": package_proj,
+    }
+    try:
+        client.table("career_strategies").upsert(record, on_conflict="student_id").execute()
+    except Exception as e:
+        logger.error(f"Error saving career strategy for {student_id}: {e}")
 
 
 def get_job_matches(student_id: str) -> list[dict]:

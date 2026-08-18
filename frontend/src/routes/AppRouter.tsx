@@ -9,11 +9,16 @@ import OnboardingPage from '@/pages/Onboarding';
 import ResumePage from '@/pages/Resume';
 import SettingsPage from '@/pages/Settings';
 
+import LoginPage from '@/pages/Login';
+import RegisterPage from '@/pages/Register';
+
 export function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<PublicOnlyRoute />}>
+          <Route path="login" element={<LoginPage />} />
+          <Route path="register" element={<RegisterPage />} />
           <Route index element={<OnboardingPage />} />
         </Route>
 

@@ -10,6 +10,7 @@ export interface CareerGoals {
   companyTypes: string[];
   requiredConstraints: string[];
   salaryExpectation?: string;
+  experienceLevel?: string;
 }
 
 export interface UserProfile {
@@ -110,6 +111,8 @@ export interface ResumeAnalysis {
   originalExcerpt: string;
   optimizedExcerpt: string;
   checklist: { id: string; label: string; done: boolean }[];
+  targetRole?: string;
+  targetCompany?: string;
 }
 
 export interface InterviewQuestion {
@@ -162,6 +165,7 @@ export interface CareerData {
   learningRecommendations: string[];
   marketInsights: { skill: string; demand: number; growth: number }[];
   packageProjection: { min: number; max: number };
+  targetRole?: string;
 }
 
 export type ApplicationStage =

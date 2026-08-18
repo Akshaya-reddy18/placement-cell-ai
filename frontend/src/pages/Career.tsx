@@ -26,36 +26,41 @@ export default function CareerPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Career Strategy"
-        description="Executive-style placement planning — roadmap, skill gaps, and market insights."
+        title={data.targetRole ? `Career Strategy · ${data.targetRole}` : "Career Strategy"}
+        description={
+          data.targetRole
+            ? `Personalized placement roadmap, skill gaps, and learning track tailored for ${data.targetRole} roles at ${data.targetCompanies?.slice(0, 3).join(', ') || 'top companies'}.`
+            : "Executive-style placement planning — roadmap, skill gaps, and market insights."
+        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetricCard
-          label="Focus area"
+          label={`Focus Strategy · ${data.targetRole || 'Target Role'}`}
           value={data.focusRecommendation}
           icon={Target}
         />
         <MetricCard
-          label="Placement probability"
+          label="Placement Probability"
           value={`${data.placementProbability}%`}
-          change="Based on profile + pipeline"
+          change={`Calibrated for ${data.targetRole || 'Target Role'}`}
           trend="up"
           icon={TrendingUp}
         />
         <MetricCard
-          label="Package projection"
+          label="Package Projection"
           value={`₹${data.packageProjection.min}-${data.packageProjection.max} LPA`}
+          change="Target Company Tier"
           icon={TrendingUp}
         />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Career roadmap">
+        <SectionCard title={`Career Roadmap · ${data.targetRole || 'Milestones'}`}>
           <TimelineCard milestones={data.milestones} />
         </SectionCard>
 
-        <SectionCard title="Skill gap analysis">
+        <SectionCard title={`Skill Gap Analysis · ${data.targetRole || 'Target Role'}`}>
           <div className="space-y-3">
             {data.skillGaps.map((gap) => (
               <div
@@ -76,18 +81,18 @@ export default function CareerPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Learning recommendations">
+        <SectionCard title={`Learning Recommendations · ${data.targetRole || 'Target Role'}`}>
           <ul className="space-y-3">
             {data.learningRecommendations.map((rec, i) => (
               <li key={i} className="flex gap-3 text-sm text-slate-300">
-                <span className="text-slate-500">{i + 1}.</span>
+                <span className="text-slate-500 font-semibold">{i + 1}.</span>
                 {rec}
               </li>
             ))}
           </ul>
         </SectionCard>
 
-        <SectionCard title="Market demand insights">
+        <SectionCard title="Market Demand Insights">
           <AnalyticsChart
             data={data.marketInsights.map((m) => ({ name: m.skill, demand: m.demand, growth: m.growth }))}
             dataKeys={['demand']}
@@ -97,10 +102,15 @@ export default function CareerPage() {
         </SectionCard>
       </div>
 
-      <SectionCard title="Target company roadmap">
+      <SectionCard title={`Target Company Roadmap · ${data.targetRole || 'Target Role'}`}>
+        <p className="text-xs text-slate-400 mb-3">
+          Tailored company pathway and hiring loops for your selected target companies:
+        </p>
         <div className="flex flex-wrap gap-2">
           {data.targetCompanies.map((company) => (
-            <Badge key={company}>{company}</Badge>
+            <Badge key={company} variant="default" className="text-sm py-1 px-3">
+              {company}
+            </Badge>
           ))}
         </div>
       </SectionCard>

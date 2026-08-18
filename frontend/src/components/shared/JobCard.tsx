@@ -34,7 +34,10 @@ export function JobCard({ job, compact = false, onViewDetails, onApply, classNam
           </div>
 
           {!compact && (
-            <p className="line-clamp-2 text-sm text-slate-400">{job.description}</p>
+            <div 
+              className="line-clamp-4 overflow-hidden break-words text-sm text-slate-400 [&>h2]:text-base [&>h2]:font-semibold [&>h2]:mb-2 [&>h2]:mt-4 [&>h2:first-child]:mt-0 [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:list-disc [&>ul]:pl-5 [&>ul]:mb-2 [&>li]:mb-1 [&_strong]:text-slate-200 [&_a]:text-blue-400 hover:[&_a]:text-blue-300 [&_a]:underline [&_br]:hidden"
+              dangerouslySetInnerHTML={{ __html: job.description }} 
+            />
           )}
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
